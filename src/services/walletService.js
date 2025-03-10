@@ -1,35 +1,81 @@
-const axios = require("axios");
+// const { BigNumber } = require("moralis/common-core");
 
-const MORALIS_API_KEY = process.env.MORALIS_API_KEY;
-// const MORALIS_API_KEY ='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6ImVhOTFlMDE3LTZiZWMtNDAwMS04MTRjLTVmNTk5Y2M0ZDVjMSIsIm9yZ0lkIjoiNDM1MTMyIiwidXNlcklkIjoiNDQ3NjI5IiwidHlwZSI6IlBST0pFQ1QiLCJ0eXBlSWQiOiI1YzdhYWUyNS1lYWI2LTQ5ZDItYWJkMi1lNDk2YTViN2RlZDUiLCJpYXQiOjE3NDEyOTk5MzMsImV4cCI6NDg5NzA1OTkzM30.XAvsZYhX2fRCuYqw4kPdjN46hAX-JyZMMBxCE_osBZI';
-const BLOCKCYPHER_BASE_URL = "https://api.blockcypher.com/v1/ltc/main";
+const Moralis = require("moralis").default;
 
-// Fetch transactions for EVM wallets (ETH, BSC, Polygon, etc.)
-async function getEVMTransactions(walletAddress, chain = "eth") {
-    try {
-        const response = await axios.get(
-            `https://deep-index.moralis.io/api/v2/${walletAddress}`,
-            {
-                headers: { "x-api-key": MORALIS_API_KEY },
-                params: { chain, from_block: "0" }
-            }
-        );
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching EVM transactions:", error.response?.data || error.message);
-        throw new Error("Failed to fetch EVM transactions.");
-    }
+// Fetch Wallet Balance
+async function getWalletBalance(address, chain = "0x1") {
+//   await initMoralis();
+
+  try {
+    const response = await Moralis.EvmApi.balance.getNativeBalance({
+      address,
+      chain,
+    });
+
+    return {
+      address,
+      balance: response.raw.balance / 1e18, // Convert Wei to ETH
+      currency: "ETH",
+    };
+
+    // return response.toJSON();
+  } catch (error) {
+    console.error("Error fetching wallet balance:", error.message);
+    return { error: "Failed to fetch wallet balance." };
+  }
 }
 
-// Fetch transactions for Litecoin wallets
-async function getLTCTransactions(walletAddress) {
-    try {
-        const response = await axios.get(`${BLOCKCYPHER_BASE_URL}/addrs/${walletAddress}/full`);
-        return response.data;
-    } catch (error) {
-        console.error("Error fetching LTC transactions:", error.response?.data || error.message);
-        throw new Error("Failed to fetch LTC transactions.");
-    }
+async function getTokenHoldings(address, chain = "0x1") {
+//   await initMoralis();
+
+  try {
+    const response = await Moralis.EvmApi.token.getWalletTokenBalances({
+      address,
+      chain,
+    });
+
+    return response.raw.map((token) => ({
+      name: token.name,
+      symbol: token.symbol,
+      balance: token.balance / Math.pow(10, token.decimals),
+      decimals: token.decimals,
+      contractAddress: token.token_address,
+    }));
+
+    // return response.raw;
+  } catch (error) {
+    console.error("Error fetching token holdings:", error.message);
+    return { error: "Failed to fetch token holdings." };
+  }
 }
 
-module.exports = { getEVMTransactions, getLTCTransactions };
+async function getRecentTransactions(address, chain = "0x1") {
+//   await initMoralis();
+
+  try {
+    const response = await Moralis.EvmApi.transaction.getWalletTransactions({
+      address,
+      chain,
+    });
+    // console.log(response.result[0]);
+
+    return response.result.map((tx) => ({
+      hash: tx.hash,
+      from: tx._data.from._value || "Unknown",
+      to: tx._data.to._value || "Unknown",
+      value: tx._data.value.rawValue ? (Number(tx._data.value.rawValue) / 1e18).toFixed(6) + " ETH" : "0 ETH",
+      gasUsed: tx._data.gasUsed,
+      gasPrice: tx._data.value ? (Number(tx._data.value) / 1e9).toFixed(2) + " Gwei" : "N/A",
+      timestamp: tx._data.blockTimestamp ? new Date(tx._data.blockTimestamp).toLocaleString() : "N/A",
+      status: tx.receiptStatus === 1 ? "Success" : "Failed",
+
+    }));
+
+    //   return response;
+  } catch (error) {
+    console.error("Error fetching transactions:", error.message);
+    return { error: "Failed to fetch transactions." };
+  }
+}
+
+module.exports = { getWalletBalance, getTokenHoldings, getRecentTransactions };

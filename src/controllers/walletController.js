@@ -1,5 +1,5 @@
 // const { getWalletTransactions } = require('../services/moralisService')
-const { getEVMTransactions, getLTCTransactions } = require("../services/walletService");
+const { getEVMTransactions, filterBuySellTransactions, calculateROI } = require("../services/walletService");
 
 async function fetchTransactions(req, res) {
     try {
@@ -22,4 +22,26 @@ async function fetchTransactions(req, res) {
     }
 }
 
-module.exports = { fetchTransactions };
+const fetchAnalytics =  async (req, res) => {
+    const { address, chain } = req.body;
+
+    if (!address) {
+        return res.status(400).json({ error: "Wallet address is required" });
+    }
+
+    try {
+        const transactions = await getEVMTransactions(address, chain);
+        // console.log(transactions.result)
+        const { buys, sells } = filterBuySellTransactions(address, transactions.result);
+        const { tradeResults } = calculateROI(buys, sells);
+        // console.log(tradeRes)
+
+        return res.json({ address, tradeResults, buys, sells });
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+};
+
+// module.exports = router;
+
+module.exports = { fetchTransactions, fetchAnalytics };
